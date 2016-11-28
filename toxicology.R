@@ -1,8 +1,37 @@
 install.packages("vcd")
-require(vcd)
-require(MASS)
+install.packages("SDMTools")
+install.packages("ROCR")
+install.packages("e1071")
+install.packages("caret")
+install.packages("MASS")
+install.packages("randomForest")
+installed.packages("foreign")
+installed.packages("nnet")
+installed.packages("ggplot2")
+installed.packages("reshape2")
+install.packages("caret")
+install.packages("rpart")
+install.packages("rpart.plot")
+install.packages("doSNOW")
 
-gene <- read.delim("~/Dropbox1/Dropbox/CMPE 239/Project/Dataset/GENETOX_Bacterial mutagenicity_NTP (1)/GENETOX_Bacterial mutagenicity_NTP.txt")
+library(rpart)
+library(rpart.plot)
+library(doSNOW)
+library(foreign)
+library(nnet)
+library(ggplot2)
+library(reshape2)
+library(caret)
+library(SDMTools)
+library(vcd)
+library(MASS)
+library(ROCR)
+library(e1071)
+library(randomForest)
+
+
+gene <- read.delim("GENETOX_Bacterial mutagenicity_NTP.txt")
+plot(gene$STUDY_CONCLUSION, col=c("blue","green","yellow"))
 
 # take subset of data only for year 2015
 gene.subset <- droplevels(subset(gene,  format(as.Date(gene$START_DATE),"%y")== "15"  ))
@@ -21,16 +50,17 @@ gene.subset$ACCESSION_NUMBER <- as.character(gene.subset$ACCESSION_NUMBER)
 gene.subset$DEPOSITOR_STUDY_NUMBER <- as.character(gene.subset$DEPOSITOR_STUDY_NUMBER)
 gene.subset$ORGANIZATION_NAME <- as.character(gene.subset$ORGANIZATION_NAME)
 
+plot(gene.subset$STUDY_CONCLUSION, col=c("blue","green","yellow"))
+
 # create two new variables to classify as (non)mutagen 
 mutagen <- 1
 nonmutagen <- 0
 
 
 # data looks exponentially distrbuted
-hist(gene.subset$DOSE, breaks=500)
-hist(gene.subset$COUNT, breaks=50)
+hist(gene.subset$DOSE, breaks=50, xlab="DOSE", main="Histogram of DOSE")
+hist(gene.subset$COUNT, breaks=50, xlab="COUNT", main="Histogram of COUNT")
 
-str(gene.subset)
 
 # Count has NA's , for all the rows that have NA are replace with COUNT_MEAN value
 
@@ -39,6 +69,7 @@ gene.subset$newCount <- ifelse(is.na(gene.subset$COUNT), gene.subset$COUNT_MEAN,
 dose <- gene.subset$DOSE
 count <-  gene.subset$newCount
 
+# Check the corelation between dose and count
 cor(dose,count, use="complete")
 #-0.2706109, they shuld not be highly corelated which is true in this case
 
@@ -51,6 +82,7 @@ gene.subset <-gene.subset[-which(is.na(count)),]
 dim(gene.subset)
 #[1] 5186   26
 
+# Finding the mean of Dose and Count
 mean( gene.subset$DOSE)
 #[1] 1217.302
 mean(gene.subset$newCount)
@@ -60,20 +92,14 @@ max(gene.subset$newCount) #2242
 
 # Add new column if study conclusion is Poistive , its Mutage
 # if its Equivocal or Negative its Non mutagen
-gene.subset$STUDY_CONCLUSION <- as.character(gene.subset$STUDY_CONCLUSION)
+str(gene.subset$STUDY_CONCLUSION)
 gene.subset$RESULT <- ifelse(gene.subset$STUDY_CONCLUSION == "Positive", 1,0)
-
-# convert back to factor variable
-gene.subset$STUDY_CONCLUSION <- as.factor(gene.subset$STUDY_CONCLUSION)
+# convert RESULT to factor variable
 gene.subset$RESULT <- as.factor(gene.subset$RESULT)
-
-
-#gene.subset$OUT <- relevel(gene.subset$STUDY_CONCLUSION, ref="Negative")
-#str(gene.subset)
+str(gene.subset$RESULT)
 
 # Split the data to train and test
 set.seed(1234)
-
 gene.holdout.variable <- rbinom(n = dim(gene.subset)[1], size = 1, prob = .2)
 
 # training data
@@ -91,21 +117,21 @@ train.holdout.variable
 gene.train <- training.data[train.holdout.variable==0, ]
 dim(gene.train)
 str(gene.train)
-View(gene.train)
+dim(gene.train)
 write.csv(gene.train,"gene.train.csv")
 # validation data
 gene.valid <- training.data[train.holdout.variable==1, ]
 dim(gene.valid)
 View(gene.valid)
 
-contrasts(gene.train$RESULT)
 
-#################################################
+###################### plot the graphs ###########################
 
 plot(gene.train$STUDY_CONCLUSION, gene.train$DOSE)
   
 plot(gene.train$STUDY_CONCLUSION, gene.train$COUNT) 
 plot(dose,count)
+plot(gene.train$STUDY_CONCLUSION, col=c("blue","green","yellow"))
 
 #################### 1. Logistic Regression#############################
 # perform logistic regression and find the best model based on AIC value
@@ -127,75 +153,90 @@ model12 <- glm(RESULT ~ newCount + TRIAL_RESULT + MICROSOMAL_ACTIVATION_USED + T
 model13 <- glm(RESULT ~  newCount + STRAIN, family = binomial(link='logit'), data=gene.train)
 model14 <- glm(RESULT ~ newCount + STRAIN + TRIAL_RESULT,family=binomial(link='logit'), data=gene.train)
 
-str(gene.train)
+# Check the summary of each model #####
+summary(model1)  # AIC 1847.5, 3326 Residual
+summary(model2) #AIC:  1849.9,  3324 Residual
+summary(model3) #AIC:  1409.9,  3320 Residual
+summary(model4)# AIC:  1394.5,  3319 Residual  # based on AIC , Residual good model
+summary(model5) #AIC:  1394.5,  3319 Residual  # based on AIC, Residual  good model
+summary(model6) #AIC:  1395.5,  3320 Residual  # based on AIC,Residual good model
+summary(model7) #AIC : 1413.6,  3320 Residual
+summary(model8) #AIC:  1402.4,  3322 Residual
+summary(model9) #AIC:  1402.6,  3321 Residua
+summary(model10) #AIC: 1402.6,  3319 Residual
+summary(model11) #AIC: 1404.6,  3318 Residual
+summary(model12) #AIC: 1426.4,  3319 Residual
+summary(model13) #AIC: 1875.2,  3325 Residual
+summary(model14) #AAIC: 1431.4, 3321 Residual
 
-summary(model1)  # AIC 1836.5
-summary(model2) #AIC: 1838.7
-
-summary(model3) #AIC: 1352.3
-summary(model4)# AIC: 1394.5
-summary(model5) #AIC: 1394.5
-summary(model6) #AIC: 1395.5
-summary(model7)
-summary(model8)#AIC: 1402.4
-summary(model9) #AIC: 1402.6
-
-summary(model10) #AIC: 1402.6
-summary(model11) #AIC: 1404.6
-summary(model12) #AIC: 1426.4
-summary(model13) #AIC: 1875.2
-summary(model14) #AAIC: 1431.4
-
+######### Need to check the pvalue to see how mch each predictor is contributing to the model
 
 # ANOVA
-anova(model1, test="Chisq") # newcount, DOSE significant
-anova(model2, test="Chisq") #  STRAIN not significant. DOSE , newcountsignificant
-anova(model3, test="Chisq") #   STRAIN not significant. DOSE,newcount, TRIAL_RESULT significant
-anova(model4, test="Chisq") #   STRAIN not significant. DOSE, TRIAL_RESULT,newcount,MICROSOMAL_ACTIVATION_USED significant
+anova(model1, test="Chisq") 
+# newcount, DOSE significant based on P- Value
+anova(model2, test="Chisq") 
+#  STRAIN not significant. DOSE , newcountsignificant
+anova(model3, test="Chisq")
+#   STRAIN not significant. DOSE,newcount, TRIAL_RESULT significant
+anova(model4, test="Chisq")
+#   STRAIN not significant. DOSE, TRIAL_RESULT,newcount,MICROSOMAL_ACTIVATION_USED significant
 anova(model5, test="Chisq")
-anova(model6, test="Chisq") # STRAIN not significant
-anova(model7, test="Chisq") # newCOunt , STRAIN not dignificant
-anova(model8, test="Chisq") # DOSE, TRIAL_RESULT, MICROSOMAL_ACTIVATION_USED all significant
-anova(model9, test="Chisq") #DOSE, newCount, TRIAL_RESULT, MICROSOMAL_ACTIVATION_USED all significant
-
-anova(model10, test="Chisq") #
-
+# STRAIN not significant
+anova(model6, test="Chisq") 
+# STRAIN not significant
+anova(model7, test="Chisq") 
+# newCOunt , STRAIN not dignificant
+anova(model8, test="Chisq") 
+# DOSE, TRIAL_RESULT, MICROSOMAL_ACTIVATION_USED all significant
+anova(model9, test="Chisq") 
+#DOSE, newCount, TRIAL_RESULT, MICROSOMAL_ACTIVATION_USED all significant
+anova(model10, test="Chisq") 
+# TREATMENT_GROUP_TYPE not significant
 anova(model11, test="Chisq")
+# TREATMENT_GROUP_TYPE not significant
 anova(model12, test="Chisq")
+# TREATMENT_GROUP_TYPE not significant , newCOunt
 anova(model13, test="Chisq")
+# newCount , STRAIN not significant
 anova(model14, test="Chisq")
 
-View(gene.valid)
-
-# based on p values and AIC model9 is significant
+######################### FINAL MODEL USING LOGISTIC REGRESSION ############ 
+# based on p values , RESIDUAL and  AIC model9 and model 8 are  significant
 # validate model against valid data
+predict(model9,newdata=gene.valid)
 fitted.results9 <- predict(model9,newdata=gene.valid,type='response')
 final.fitted.results9 <- ifelse(fitted.results9 > 0.5,1,0)
 
-fitted.results4 <- predict(model4,newdata=gene.valid,type='response')
-final.fitted.results4 <- ifelse(fitted.results4 > 0.5,1,0)
+fitted.results8 <- predict(model8,newdata=gene.valid,type='response')
+final.fitted.results8 <- ifelse(fitted.results8 > 0.5,1,0)
 
-# for model 9 find the accuracy , model is 94% accurate
+# for model 9 find the accuracy , model is 95% accurate
 misClasificError9 <- mean(final.fitted.results9 != gene.valid$RESULT)
 print(paste('Accuracy',1-misClasificError9))
 #[1] "Accuracy 0.953028430160692
 
-###on test data###
+# for model 8 find the accuracy , model is 95% accurate
+misClasificError8 <- mean(final.fitted.results8 != gene.valid$RESULT)
+print(paste('Accuracy',1-misClasificError8))
+#[1] "Accuracy 0.953028430160692
+
+### RUN THE MODEL 9 ON TEST DATA ###
 
 test.results9 <- predict(model9,newdata=test.data,type='response')
 test.fitted.results9 <- ifelse(test.results9 > 0.5,1,0)
 # for model 9 find the accuracy , model is 94% accurate
 test_misClasificError9 <- mean(test.fitted.results9 != test.data$RESULT)
 print(paste('Accuracy',1-test_misClasificError9))
-#[1] "Accuracy 0.943702290076336"
 
-test.results4 <- predict(model4,newdata=test.data,type='response')
-test.fitted.results4 <- ifelse(test.results4 > 0.5,1,0)
+
+test.results8 <- predict(model8,newdata=test.data,type='response')
+test.fitted.results8 <- ifelse(test.results8 > 0.5,1,0)
 # for model 9 find the accuracy , model is 94% accurate
-test_misClasificError4 <- mean(test.fitted.results4 != test.data$RESULT)
-print(paste('Accuracy',1-test_misClasificError4))
+test_misClasificError8 <- mean(test.fitted.results8 != test.data$RESULT)
+print(paste('Accuracy',1-test_misClasificError8))
 
-
+# After running the model on the test data , Accuracy is 94% for model8 and model9.
+# both model8 & 9 seems to be best model of all
 
 
 
@@ -208,47 +249,69 @@ contrasts(gene.valid$RESULT) = contr.treatment(2)
 #a model with good predictive ability should have an AUC closer to 1 (1 is ideal) than to 0.5.
 
 
-install.packages("ROCR")
-library(ROCR)
-p <-  predict(model9,newdata=test.data,type='response')
-pr <- prediction(p, test.data$RESULT)
-prf <- performance(pr, measure = "tpr", x.measure = "fpr")
-plot(prf)
 
-auc <- performance(pr, measure = "auc")
-auc <- auc@y.values[[1]]
-auc
+p8 <-  predict(model8,newdata=test.data,type='response')
+p9 <-  predict(model9,newdata=test.data,type='response')
+
+pred8 <- prediction(p8, test.data$RESULT)
+pred9 <- prediction(p9, test.data$RESULT)
+
+prf8 <- performance(pred8, measure = "tpr", x.measure = "fpr")
+prf9 <- performance(pred9, measure = "tpr", x.measure = "fpr")
+
+plot(prf8, col="blue")
+plot(prf9, col="red", add=T)
+
+abline(a=0, b= 1)
+
+perf9 <- performance(pr9, measure = "auc")
+auc9 <- perf9@y.values[[1]]
+auc9
 #[1] 0.8100697
 
-# need to perform  cross validation such as k-fold cross validation
+perf8 <- performance(pr8, measure = "auc")
+auc8 <- perf8@y.values[[1]]
+auc8
+#[1] 0.7970266
 
-###################################
+
+opt.cut = function(perf, pred){
+  cut.ind = mapply(FUN=function(x, y, p){
+    d = (x - 0)^2 + (y-1)^2
+    ind = which(d == min(d))
+    c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+      cutoff = p[[ind]])
+  }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+
+print(opt.cut(prf8, pred8))
+#                  [,1]
+#sensitivity 0.72413793 TRUE POSITIVE
+#specificity 0.70031217  TRUE NEGATIVE
+#cutoff      0.06149333
+print(opt.cut(prf9, pred9))
+#[,1]
+#sensitivity 0.78160920
+#specificity 0.67741935
+#cutoff      0.05918551
+
+# Based on the ROC curve model 9 is found to be good model
+
+##########################END OF LOGISTIC REGRESSION #####################
 
 
 #################Multinomial Regression #################
-installed.packages("foreign")
-installed.packages("nnet")
-installed.packages("ggplot2")
-installed.packages("reshape2")
 
-require(foreign)
-require(nnet)
-require(ggplot2)
-require(reshape2)
-
-library(foreign)
-library(nnet)
-library(ggplot2)
-library(reshape2)
 
 str(gene.train$STUDY_CONCLUSION)
 
-#gene.train$OUT <- relevel(gene.valid)
 mmodel1 <- multinom(STUDY_CONCLUSION ~ DOSE + newCount,data=gene.train)
 summary(mmodel1)
 z1 <- summary(mmodel1)$coefficients/summary(mmodel1)$standard.errors
 p1 <- (1 - pnorm(abs(z1), 0, 1))*2
 p1  # newCount is not significant
+#Residual Deviance: 4435.872 
+#AIC: 4447.872 
 
 
 mmodel2 <- multinom(STUDY_CONCLUSION ~ DOSE + newCount + STRAIN,data=gene.train)
@@ -256,6 +319,8 @@ summary(mmodel2)
 z2 <- summary(mmodel2)$coefficients/summary(mmodel2)$standard.errors
 p2 <- (1 - pnorm(abs(z2), 0, 1))*2
 p2  #newCount is not Significant
+#Residual Deviance: 4385.653 
+#AIC: 4405.653
 
 mmodel3 <- multinom(STUDY_CONCLUSION ~ DOSE + newCount + STRAIN + MICROSOMAL_ACTIVATION_USED,data=gene.train)
 summary(mmodel3)
@@ -263,7 +328,8 @@ summary(mmodel3)
 z3 <- summary(mmodel3)$coefficients/summary(mmodel3)$standard.errors
 p3 <- (1 - pnorm(abs(z3), 0, 1))*2
 p3
-
+#Residual Deviance: 4381.767 
+#AIC: 4405.767
 
 mmodel4 <- multinom(STUDY_CONCLUSION ~ DOSE +STRAIN + newCount+TRIAL_RESULT+MICROSOMAL_ACTIVATION_USED,data=gene.train)
 summary(mmodel4)
@@ -271,6 +337,8 @@ summary(mmodel4)
 z4 <- summary(mmodel4)$coefficients/summary(mmodel4)$standard.errors
 p4 <- (1 - pnorm(abs(z4), 0, 1))*2
 p4
+#Residual Deviance: 3449.88 
+#AIC: 3489.88 
 
 mmodel5 <- multinom(STUDY_CONCLUSION ~ DOSE  + STRAIN + MICROSOMAL_ACTIVATION_USED,data=gene.train)
 summary(mmodel5)
@@ -329,18 +397,29 @@ p10
 
 # models 6 ad model 8 are good based on p value, AIC , Residual
 
-model6.predict <- predict(mmodel6,gene.valid)
-model8.predict <- predict(mmodel8,gene.valid)
-model10.predict <- predict(mmodel8,gene.valid)
+model6.predict <- predict(mmodel6,newdata=gene.valid)
+model8.predict <- predict(mmodel8,newdata=gene.valid)
+model9.predict <- predict(mmodel9,newdata=gene.valid)
+model10.predict <- predict(mmodel10,newdata=gene.valid)
 
 require(ROCR)
-x.logit.prob <- predict(mmodel10, type="prob", newdata=gene.valid, probability = T)
-x.logit.prob.rocr <- prediction(x.logit.prob, gene.valid$STUDY_CONCLUSION)
+#x.logit.prob <- predict(mmodel10,  newdata=gene.valid,"probs")
+#x.logit.prob.rocr <- prediction(x.logit.prob, gene.valid$STUDY_CONCLUSION)
 
+#plot the confusion matrix
 cm6 <- table(model6.predict, gene.valid$STUDY_CONCLUSION)
 print(cm6)
 
-attr(x.logit.prob, "probabilities")
+cm8 <- table(model8.predict, gene.valid$STUDY_CONCLUSION)
+print(cm8)
+
+cm9 <- table(model9.predict, gene.valid$STUDY_CONCLUSION)
+print(cm9)
+
+
+cm10 <- table(model10.predict, gene.valid$STUDY_CONCLUSION)
+print(cm10)
+#attr(x.logit.prob, "probabilities")
 cm8 <- table(model8.predict, gene.valid$STUDY_CONCLUSION)
 print(cm8)
 
@@ -361,81 +440,86 @@ tst.mp8 <-  predict(mmodel8,newdata=test.data)
 tmm8 <- table(tst.mp8, test.data$STUDY_CONCLUSION)
 print(tmm8)
 
+tst.mp9 <-  predict(mmodel9,newdata=test.data)
+tmm9 <- table(tst.mp9, test.data$STUDY_CONCLUSION)
+print(tmm9)
+
+tst.mp10 <-  predict(mmodel10,newdata=test.data)
+tmm10 <- table(tst.mp10, test.data$STUDY_CONCLUSION)
+print(tmm10)
 
 #############SVM classification ####################
-library("e1071")
+
+plot(gene.train$DOSE, gene.train$newCount, col=gene.train$STUDY_CONCLUSION,
+     xlab="DOSE",ylab="COUNT")
+# from the plot we can differentiate between positive and negatives easily but 
+# not negative and Equivocal
+plot(gene.train$DOSE, col=gene.train$STUDY_CONCLUSION, ylab="DOSE")
+plot( gene.train$newCount, col=gene.train$STUDY_CONCLUSION,ylab="COUNT")
+
+plot( gene.train$newCount,gene.train$STUDY_CONCLUSION, col=gene.train$STUDY_CONCLUSION,
+      ylab="STUDY CONCLUSION", xlab="COUNT")
 
 
-plot(gene.train$DOSE, gene.train$newCount, col=gene.train$STUDY_CONCLUSION)
-plot(gene.train$DOSE, col=gene.train$STUDY_CONCLUSION)
-plot(newCount, col=gene.train$STUDY_CONCLUSION)
-
-?svm
 svm.model <- svm(STUDY_CONCLUSION ~ DOSE, data = gene.train, cost = 100, gamma = 1)
 summary(svm.model)
-plot(svm.model, gene.train)
 svm.pred <- predict(svm.model, gene.valid)
 table(pred = svm.pred, true = gene.valid$STUDY_CONCLUSION)
 
-View(gene.train)
 
 svm.model1 <- svm(STUDY_CONCLUSION ~ DOSE+newCount, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model1)
-plot(svm.model1)
 svm.pred1 <- predict(svm.model1, gene.valid)
 table(pred = svm.pred1, true = gene.valid$STUDY_CONCLUSION)
 
 svm.model2 <- svm(STUDY_CONCLUSION ~ DOSE+STRAIN, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model2)
-plot(svm.model2)
 svm.pred2 <- predict(svm.model2, gene.valid)
 table(pred = svm.pred2, true = gene.valid$STUDY_CONCLUSION)
 
 svm.model3 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+STRAIN, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model3)
-plot(svm.model3)
 svm.pred3 <- predict(svm.model3, gene.valid)
 table(pred = svm.pred3, true = gene.valid$STUDY_CONCLUSION)
 
 svm.model4 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+STRAIN+MICROSOMAL_ACTIVATION_USED, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model4)
-plot(svm.model4)
 svm.pred4 <- predict(svm.model4, gene.valid)
 table(pred = svm.pred4, true = gene.valid$STUDY_CONCLUSION)
 
 svm.model5 <- svm(STUDY_CONCLUSION ~ DOSE+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model5)
-plot(svm.model55)
 svm.pred5 <- predict(svm.model5, gene.valid)
 table(pred = svm.pred5, true = gene.valid$STUDY_CONCLUSION)
-str(gene.valid)
 
 svm.model6 <- svm(STUDY_CONCLUSION ~ DOSE+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT+TREATMENT_GROUP_TYPE, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 summary(svm.model6)
-plot(svm.model6)
 svm.pred6 <- predict(svm.model6, gene.valid)
 table(pred = svm.pred6, true = gene.valid$STUDY_CONCLUSION)
 
-svm.model7 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, cost = 100, gamma = 1, kernel="radial")
+svm.model7 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, 
+                  data = gene.train, cost = 100, gamma = 1, kernel="radial",probability=T)
 summary(svm.model7)
-plot(svm.model57)
 svm.pred7 <- predict(svm.model7, gene.valid)
 table(pred = svm.pred7, true = gene.valid$STUDY_CONCLUSION)
-str(gene.valid)
 misClasificError7 <- (82+1+7+4+25+2)/(38+82+1+7+620+4+2+25+30)
 #[1] 0.1495674
 
 svm.model8 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT+TREATMENT_GROUP_TYPE, data = gene.train, cost = 100, gamma = 2
                   , kernel="radial")
 summary(svm.model8)
-plot(svm.model8, data=gene.valid)
 svm.pred8 <- predict(svm.model8, gene.valid)
 table(pred = svm.pred8, true = gene.valid$STUDY_CONCLUSION)
 
-misClasificError8 <- (71+1+11+7+3+22)/(49+71+1+11+613+7+3+22+32)
-#[1] 0.1421508
 
-#final models
+svm.model9 <- svm(STUDY_CONCLUSION ~ DOSE+newCount+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, cost = 100, gamma = 2
+                  , kernel="radial")
+summary(svm.model9)
+svm.pred9 <- predict(svm.model9, gene.valid)
+table(pred = svm.pred9, true = gene.valid$STUDY_CONCLUSION)
+
+
+##########################final models
 svm.pred.final7 <- predict(svm.model7, test.data)
 summary(svm.pred.final7)
 table(pred = svm.pred.final7, true = test.data$STUDY_CONCLUSION)
@@ -444,16 +528,36 @@ svm.pred.final8 <- predict(svm.model8, test.data)
 summary(svm.pred.final8)
 table(pred = svm.pred.final8, true = test.data$STUDY_CONCLUSION)
 
-misClasificError <- (81+71+6+7+1+48)/(57+81+7+16+793+7+1+48+38)
-#[1] 0.2041985
-# 20%
+svm.pred.final9 <- predict(svm.model9, test.data)
+summary(svm.pred.final9)
+table(pred = svm.pred.final9, true = test.data$STUDY_CONCLUSION)
+
+############ CONFUSION MATRIX FOR THESE THREE MODELS ###############
+
+p7 <-  predict(svm.model7,newdata=test.data,decision.values=T)
+svmmodel.probs7<-attr(p7,"decision.values")
+svmmodel.class7<-predict(svm.model7,test.data,type="class")
+#analyzing result
+svmmodel.confusion7<-confusionMatrix(test.data$STUDY_CONCLUSION,svmmodel.class7)
+
+p8 <-  predict(svm.model8,newdata=test.data,decision.values=T)
+svmmodel.probs8<-attr(p8,"decision.values")
+svmmodel.class8<-predict(svm.model8,test.data,type="class")
+#analyzing result
+svmmodel.confusion8<-confusionMatrix(test.data$STUDY_CONCLUSION,svmmodel.class8)
+
+p9 <-  predict(svm.model9,newdata=test.data,decision.values=T)
+svmmodel.probs9<-attr(p9,"decision.values")
+svmmodel.class9<-predict(svm.model9,test.data,type="class")
+#analyzing result
+svmmodel.confusion9<-confusionMatrix(test.data$STUDY_CONCLUSION,svmmodel.class9)
+
+
 
 ##################Random forest ######################
 # CART
 set.seed(1234)
 
-library(randomForest)
-?randomForest
 rf1 <- randomForest(STUDY_CONCLUSION ~ DOSE+newCount, data = gene.train, importance=T, ntree=1000)
 rf1
 varImpPlot(rf1)
@@ -471,7 +575,6 @@ rf4 <- randomForest(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATI
 rf4
 varImpPlot(rf4)
 
-svm.model5 <- svm(STUDY_CONCLUSION ~ DOSE+STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, cost = 100, gamma = 1, kernel="radial")
 
 
 rf7 <- randomForest(STUDY_CONCLUSION ~ DOSE++TRIAL_RESULT, data = gene.train, importance=T, ntree=1000)
@@ -504,18 +607,18 @@ rf12 <- randomForest(STUDY_CONCLUSION ~ DOSE++TRIAL_RESULT+STRAIN+newCount+TREAT
 rf12
 varImpPlot(rf12)
 
+
+#best model
 rf5 <- randomForest(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, importance=T, ntree=1000)
 rf5
 varImpPlot(rf5)
-#best model
+
+
+
 
 
 ####################### rpart ####################
-install.packages("caret")
-library(rpart)
-library(rpart.plot)
-library(caret)
-library(doSNOW)
+
 # prepare training scheme
 
 set.seed(1234)
@@ -533,19 +636,31 @@ features = c("DOSE","newCount", "STRAIN","MICROSOMAL_ACTIVATION_USED","TRIAL_RES
 rpart.train.1 <- gene.train[,features]
 
 set.seed(1234)
-fir.rf <- train(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, method="rf", tuneLength = 3,
+fir.rf <- train(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, 
+                    data = gene.train, method="rf", tuneLength = 3,
                  trControl=control)
+
+fir.rf <- train(STUDY_CONCLUSION ~ DOSE+newCount+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, 
+                data = gene.train, method="rf", tuneLength = 3,
+                trControl=control)
 
 set.seed(1234)
 fit.rpart <- train(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, 
                  method="rpart", tuneLength = 3,
                  trControl=control)
 
-
+fit.rpart <- train(STUDY_CONCLUSION ~ DOSE+newCount+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, 
+                   method="rpart", tuneLength = 3,
+                   trControl=control)
 set.seed(1234)
 fit.svm <- train(STUDY_CONCLUSION ~ DOSE+newCount+ STRAIN+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, 
                  method="rf", tuneLength = 3,
                  trControl=control)
+
+fit.svm <- train(STUDY_CONCLUSION ~ DOSE+newCount+MICROSOMAL_ACTIVATION_USED+TRIAL_RESULT, data = gene.train, 
+                 method="rf", tuneLength = 3,
+                 trControl=control)
+
 results <- resamples(list(CART=fit.rpart, SVM=fit.svm, RF=fir.rf))
 
 # compare the models
